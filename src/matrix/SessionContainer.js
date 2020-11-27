@@ -17,6 +17,7 @@ limitations under the License.
 import {createEnum} from "../utils/enum.js";
 import {ObservableValue} from "../observable/ObservableValue.js";
 import {HomeServerApi} from "./net/HomeServerApi.js";
+import {AuthServerApi} from "./net/AuthServerApi.js";
 import {Reconnector, ConnectionStatus} from "./net/Reconnector.js";
 import {ExponentialRetryDelay} from "./net/ExponentialRetryDelay.js";
 import {MediaRepository} from "./net/MediaRepository.js";
@@ -42,6 +43,24 @@ export const LoginFailure = createEnum(
     "Credentials",
     "Unknown",
 );
+
+// Opens a popup and waits for a "message" event from it.
+// TODO: move this in the platform
+const blockingPopup = (url) => {
+    const popup = window.open(url);
+    const promise = new Promise(resolve => {
+        const listener = ({ data, source }) => {
+            if (source === popup) {
+                resolve(data);
+                popup.close();
+                window.removeEventListener("message", listener);
+            }
+        };
+
+        window.addEventListener("message", listener);
+    });
+    return promise;
+};
 
 export class SessionContainer {
     constructor({platform, olmPromise, workerPromise}) {
@@ -85,24 +104,36 @@ export class SessionContainer {
         }
     }
 
-    async startWithLogin(homeServer, username, password) {
+    async startWithLogin(homeServer, username, authServer) {
         if (this._status.get() !== LoadStatus.NotLoading) {
             return;
         }
         this._status.set(LoadStatus.Login);
         const clock = this._platform.clock;
+        const crypto = this._platform.crypto;
         let sessionInfo;
         try {
             const request = this._platform.request;
-            const hsApi = new HomeServerApi({homeServer, request, createTimeout: clock.createTimeout});
-            const loginData = await hsApi.passwordLogin(username, password, "Hydrogen").response();
+            const asApi = new AuthServerApi({authServer, request, createTimeout: clock.createTimeout, crypto});
+            const [url, session] = await asApi.startAuthorization({ hint: username });
+            // TODO: do this as a redirect instead of a popup
+            const result = await blockingPopup(url);
+            const token = await asApi.completeAuthorization(session, result);
+            const hsApi = new HomeServerApi({
+                homeServer: homeServer,
+                accessToken: token,
+                request: this._platform.request,
+                createTimeout: clock.createTimeout
+            });
+            const userInfo = await hsApi.whoami().response();
+
             const sessionId = this.createNewSessionId();
             sessionInfo = {
                 id: sessionId,
-                deviceId: loginData.device_id,
-                userId: loginData.user_id,
+                deviceId: userInfo.device_id,
+                userId: userInfo.user_id,
                 homeServer: homeServer,
-                accessToken: loginData.access_token,
+                authServer: asApi.save(),
                 lastUsed: clock.now()
             };
             await this._platform.sessionInfoStorage.add(sessionInfo);            
@@ -143,9 +174,15 @@ export class SessionContainer {
             retryDelay: new ExponentialRetryDelay(clock.createTimeout),
             createMeasure: clock.createMeasure
         });
+        const asApi = new AuthServerApi({
+            session: sessionInfo.authServer,
+            request: this._platform.request,
+            crypto: this._platform.crypto,
+            createTimeout: clock.createTimeout
+        });
         const hsApi = new HomeServerApi({
             homeServer: sessionInfo.homeServer,
-            accessToken: sessionInfo.accessToken,
+            accessToken: asApi.accessToken(),
             request: this._platform.request,
             reconnector: this._reconnector,
             createTimeout: clock.createTimeout

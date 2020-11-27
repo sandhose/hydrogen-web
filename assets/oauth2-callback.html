@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+    </head>
+    <body>
+        <ul id="output"></ul>
+        <script type="text/javascript">
+            const params = new URLSearchParams(window.location.hash.substring(1));
+            const ul = document.getElementById("output");
+            const obj = {};
+            for (const [key, value] of params.entries()) {
+                const el = document.createElement("li");
+                el.appendChild(document.createTextNode(`${key} = ${value}`));
+                ul.appendChild(el);
+                obj[key] = value;
+            }
+            window.opener && window.opener.postMessage(obj, window.origin);
+        </script>
+    </body>
+</html>

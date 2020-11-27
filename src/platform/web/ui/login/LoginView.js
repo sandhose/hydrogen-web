@@ -27,17 +27,18 @@ export class LoginView extends TemplateView {
             placeholder: vm.i18n`Username`,
             disabled
         });
-        const password = t.input({
-            id: "password",
-            type: "password",
-            placeholder: vm.i18n`Password`,
-            disabled
-        });
         const homeserver = t.input({
             id: "homeserver",
             type: "url",
             placeholder: vm.i18n`Your matrix homeserver`,
-            value: vm.defaultHomeServer, 
+            value: "http://localhost:8008", 
+            disabled
+        });
+        const authserver = t.input({
+            id: "authserver",
+            type: "url",
+            placeholder: vm.i18n`The authentication server to use`,
+            value: "http://localhost:8008", 
             disabled
         });
         
@@ -49,12 +50,12 @@ export class LoginView extends TemplateView {
                 t.form({
                     onSubmit: evnt => {
                         evnt.preventDefault();
-                        vm.login(username.value, password.value, homeserver.value);
+                        vm.login(username.value, homeserver.value, authserver.value);
                     }
                 }, [
                     t.div({className: "form-row"}, [t.label({for: "username"}, vm.i18n`Username`), username]),
-                    t.div({className: "form-row"}, [t.label({for: "password"}, vm.i18n`Password`), password]),
                     t.div({className: "form-row"}, [t.label({for: "homeserver"}, vm.i18n`Homeserver`), homeserver]),
+                    t.div({className: "form-row"}, [t.label({for: "authserver"}, vm.i18n`Authentication server`), authserver]),
                     t.mapView(vm => vm.loadViewModel, loadViewModel => loadViewModel ? new SessionLoadStatusView(loadViewModel) : null),
                     t.div({className: "button-row"}, [
                         t.a({

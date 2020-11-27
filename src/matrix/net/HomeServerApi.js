@@ -136,7 +136,7 @@ export class HomeServerApi {
     }
 
     _authedRequest(method, url, queryParams, body, options) {
-        return this._baseRequest(method, url, queryParams, body, options, this._accessToken);
+        return this._baseRequest(method, url, queryParams, body, options, this._accessToken.get());
     }
 
     _post(csPath, queryParams, body, options) {
@@ -184,6 +184,10 @@ export class HomeServerApi {
           "password": password,
           "initial_device_display_name": initialDeviceDisplayName
         }, options);
+    }
+
+    whoami(options = null) {
+        return this._get(`/account/whoami`, {}, null, options);
     }
 
     createFilter(userId, filter, options = null) {
